@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Car Game with Joystick</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background: #87CEEB; /* Sky blue background */
+        }
+
+        .game-container {
+            position: relative;
+            width: 100%;
+            height: 600px;
+            overflow: hidden;
+            border: 2px solid #333;
+        }
+
+        .road {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: #333;
+        }
+
+        .car {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            width: 70px;
+            height: 140px;
+            background: url('1.png') no-repeat center / cover; /* Car image */
+            border-radius: 10px;
+            transform: translateX(-50%);
+        }
+
+        .object {
+            position: absolute;
+            width: 50px;
+            height: 50px;
+            background: no-repeat center / cover;
+            border-radius: 10px;
+        }
+
+        .score {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            font-size: 24px;
+            color: #fff;
+        }
+
+        .road-divider {
+            position: absolute;
+            width: 10px;
+            height: 100%;
+            background: white;
+            left: 33.33%; /* Divide into three lanes */
+        }
+
+        .road-divider:last-child {
+            left: 66.66%;
+        }
+
+        /* Joystick styles */
+        .joystick {
+            position: absolute;
+            bottom: 50px;
+            left: 50%;
+            width: 100px;
+            height: 100px;
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            border: 2px solid #fff;
+            touch-action: none; /* Disable touch actions */
+        }
+
+        .stick {
+            width: 40px;
+            height: 40px;
+            background: rgba(255, 255, 0, 0.7);
+            border-radius: 50%;
+            transition: transform 0.1s ease;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <div class="road">
+            <div class="road-divider"></div>
+            <div class="road-divider"></div>
+            <div class="car" id="car"></div>
+            <div class="score" id="score">Score: 0</div>
+        </div>
+        <div class="joystick" id="joystick">
+            <div class="stick" id="stick"></div>
+        </div>
+    </div>
+
+    <script>
+        const car = document.getElementById('car');
+        const scoreDisplay = document.getElementById('score');
+        const gameContainer = document.querySelector('.game-container');
+        const joystick = document.getElementById('joystick');
+        const stick = document.getElementById('stick');
+        const roadWidth = gameContainer.clientWidth;
+        const lanes = 3;
+        const laneWidth = roadWidth / lanes;
+        let score = 0;
+        let carPositionIndex = 1; // Starting in the middle lane
+        let gameActive = true; // Track if the game is active
+
+        // Update car position based on joystick movement
+        function updateCarPosition() {
+            const offset = carPositionIndex * laneWidth;
+            car.style.left = `${offset + (laneWidth / 2) - (car.clientWidth / 2)}px`;
+        }
+
+        // Handle joystick movement
+        joystick.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            moveStick(e);
+        });
+
+        joystick.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            moveStick(e);
+        });
+
+        joystick.addEventListener('touchend', () => {
+            stick.style.transform = 'translate(0, 0)'; // Reset stick position
+        });
+
+        function moveStick(e) {
+            const rect = joystick.getBoundingClientRect();
+            const joystickX = e.touches[0].clientX - rect.left;
+            const joystickY = e.touches[0].clientY - rect.top;
+
+            // Calculate angle and distance from the center
+            const angle = Math.atan2(joystickY - 50, joystickX - 50);
+            const distance = Math.min(Math.sqrt((joystickX - 50) ** 2 + (joystickY - 50) ** 2), 40); // Max distance for stick movement
+
+            // Update stick position
+            stick.style.transform = `translate(${distance * Math.cos(angle)}px, ${distance * Math.sin(angle)}px)`;
+
+            // Update car position based on joystick angle
+            if (angle >= -Math.PI / 4 && angle <= Math.PI / 4) {
+                // Right
+                if (carPositionIndex < lanes - 1) {
+                    carPositionIndex++;
+                }
+            } else if (angle <= -Math.PI / 4 && angle >= -3 * Math.PI / 4) {
+                // Left
+                if (carPositionIndex > 0) {
+                    carPositionIndex--;
+                }
+            }
+
+            updateCarPosition();
+        }
+
+        // Generate objects randomly
+        function createObject() {
+            if (!gameActive) return; // Stop generating if game is not active
+            const object = document.createElement('div');
+            object.className = 'object';
+            const objectType = Math.floor(Math.random() * 5) + 2; // Random object type (2.png, 3.png, 4.png)
+            object.style.backgroundImage = `url(${objectType}.png)`; // Set object image
+            object.style.left = `${Math.floor(Math.random() * lanes) * laneWidth}px`; // Random lane
+            object.style.top = '0px';
+            gameContainer.appendChild(object);
+            moveObject(object);
+        }
+
+        // Move the object downwards
+        function moveObject(object) {
+            const interval = setInterval(() => {
+                const objectPosition = object.offsetTop;
+                if (objectPosition > gameContainer.clientHeight) {
+                    clearInterval(interval);
+                    gameContainer.removeChild(object);
+                } else {
+                    object.style.top = `${objectPosition + 5}px`; // Speed of the object
+                }
+
+                // Check for collision
+                if (checkCollision(object)) {
+                    if (object.style.backgroundImage.includes('5.png')) {
+                        // End game when hitting the exit object
+                        endGame();
+                    } else {
+                        clearInterval(interval);
+                        score += 4; // Add 4 points for hitting objects
+                        scoreDisplay.textContent = `Score: ${score}`;
+                        gameContainer.removeChild(object);
+                    }
+                }
+            }, 20);
+        }
+
+        // Check for collision between car and object
+        function checkCollision(object) {
+            const carRect = car.getBoundingClientRect();
+            const objectRect = object.getBoundingClientRect();
+            return !(
+                carRect.top > objectRect.bottom ||
+                carRect.bottom < objectRect.top ||
+                carRect.left > objectRect.right ||
+                carRect.right < objectRect.left
+            );
+        }
+
+        // End the game
+        function endGame() {
+            gameActive = false;
+            alert(`Game Over! Your score is: ${score}`);
+            resetGame();
+        }
+
+        // Reset the game
+        function resetGame() {
+            score = 0;
+            scoreDisplay.textContent = `Score: ${score}`;
+            carPositionIndex = 1; // Reset car position to the middle lane
+            updateCarPosition();
+            gameActive = true; // Restart the game
+            const objects = document.querySelectorAll('.object');
+            objects.forEach(object => object.remove()); // Remove all objects from the game
+        }
+
+        // Start generating objects
+        setInterval(createObject, 1000); // Generate a new object every second
+    </script>
+</body>
+</html>
